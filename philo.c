@@ -14,11 +14,22 @@
 
 
 size_t current_time_in_ms() {
+    struct timeval time;
+    gettimeofday(&time, NULL);
+    return (time.tv_sec * 1000) + (time.tv_usec / 1000);
+}
+long get_current_time(void) {
     struct timeval tv;
     gettimeofday(&tv, NULL);
     return (tv.tv_sec * 1000) + (tv.tv_usec / 1000);
 }
-
+void print_action(t_philosopher *philo, const char *action) {
+    pthread_mutex_lock(&philo->sim_info->print_lock);
+    if (!philo->sim_info->stop_simulation) {
+        printf("Philosopher %d %s\n", philo->id, action);
+    }
+    pthread_mutex_unlock(&philo->sim_info->print_lock);
+}
 void init_data(t_data *data, char **av) {
     data->total_philosophers = atoi(av[1]);
     data->time_to_die = atoi(av[2]);
@@ -74,135 +85,179 @@ pthread_mutex_t *init_forks(t_data *data) {
 }
 
 void philo_think(t_philosopher *philo) {
-    if (philo->sim_info->stop_simulation) {
-        return;
-    }
     printf("Philosopher %d is thinking.\n", philo->id);
     usleep(1000);
 }
 
 void philo_eat(t_philosopher *philo) {
-    if (philo->sim_info->stop_simulation) {
-        return;
-    }
-
+    // Lock the forks
     pthread_mutex_lock(philo->left_fork);
-    printf("Philosopher %d has taken left fork.\n", philo->id);
-
     pthread_mutex_lock(philo->right_fork);
-    printf("Philosopher %d has taken right fork.\n", philo->id);
 
-    printf("Philosopher %d is eating.\n", philo->id);
+    printf("Philosopher %d is eating\n", philo->id);
+
+    // Update the last meal time
+    pthread_mutex_lock(&philo->sim_info->death_mutex);
     philo->last_meal_time = current_time_in_ms();
-    usleep(philo->sim_info->time_to_eat * 1000);  // Adjusted for actual eating time
+    pthread_mutex_unlock(&philo->sim_info->death_mutex);
 
+    // Simulate eating
+    usleep(philo->sim_info->time_to_eat * 1000);
+
+    // Unlock the forks
     pthread_mutex_unlock(philo->right_fork);
     pthread_mutex_unlock(philo->left_fork);
 }
 
+
 void philo_sleep(t_philosopher *philo) {
-    if (philo->sim_info->stop_simulation) {
-        return;
-    }
     printf("Philosopher %d is sleeping.\n", philo->id);
-    usleep(philo->sim_info->time_to_sleep * 1000);  // Adjusted for actual sleeping time
+    usleep(1000);
 }
 
 int check_death(t_philosopher *philo) {
     size_t current_time = current_time_in_ms();
     size_t time_since_last_meal = current_time - philo->last_meal_time;
 
-    // If the philosopher has not eaten within the allowed time, they die
+    printf("Philosopher %d last meal: %lu ms, current time: %lu ms, time to die: %d ms\n",
+           philo->id, philo->last_meal_time, current_time, philo->sim_info->time_to_die);
+
     if (time_since_last_meal > philo->sim_info->time_to_die) {
         printf("Philosopher %d has died\n", philo->id);
 
-        // Lock the simulation to safely modify the stop_simulation flag
-        pthread_mutex_lock(&philo->sim_info->simulation_lock);
-        if (!philo->sim_info->stop_simulation) {
-            philo->sim_info->stop_simulation = 1;  // Set the stop condition when first philosopher dies
-        }
-        pthread_mutex_unlock(&philo->sim_info->simulation_lock);
-
         pthread_mutex_lock(&philo->sim_info->death_mutex);
-        philo->sim_info->is_anyone_dead = 1;
+        philo->sim_info->is_anyone_dead = 1; // Set the flag
         pthread_mutex_unlock(&philo->sim_info->death_mutex);
 
-        return 1;  // Philosopher has died
+        return 1;
     }
-    return 0;  // Philosopher is still alive
+    return 0;
 }
 
 void *philosopher_routine(void *arg) {
     t_philosopher *philo = (t_philosopher *)arg;
 
-    while (1) {
-        // Check if simulation should stop immediately
-        pthread_mutex_lock(&philo->sim_info->simulation_lock);
+    while (!philo->sim_info->stop_simulation) {
+        // Thinking
+        print_action(philo, "is thinking");
+        if (philo->sim_info->stop_simulation) break;
+
+        // Attempt to eat
+        pthread_mutex_lock(philo->left_fork);
+        pthread_mutex_lock(philo->right_fork);
+
         if (philo->sim_info->stop_simulation) {
-            pthread_mutex_unlock(&philo->sim_info->simulation_lock);
-            printf("Philosopher %d is stopping due to simulation stop flag.\n", philo->id);
+            pthread_mutex_unlock(philo->right_fork);
+            pthread_mutex_unlock(philo->left_fork);
             break;
         }
-        pthread_mutex_unlock(&philo->sim_info->simulation_lock);
 
-        // Check if the philosopher is dead
-        if (check_death(philo)) break;  // Check death condition immediately
+        print_action(philo, "is eating");
+        philo->last_meal_time = get_current_time();
+        usleep(philo->sim_info->time_to_eat * 1000);
 
-        philo_think(philo);
-        if (check_death(philo)) break;  // Check after thinking
+        pthread_mutex_unlock(philo->right_fork);
+        pthread_mutex_unlock(philo->left_fork);
 
-        philo_eat(philo);
-        if (check_death(philo)) break;  // Check after eating
+        // Check if simulation has been stopped
+        if (philo->sim_info->stop_simulation) break;
 
-        philo_sleep(philo);
-        if (check_death(philo)) break;  // Check after sleeping
+        // Sleeping
+        print_action(philo, "is sleeping");
+        usleep(philo->sim_info->time_to_sleep * 1000);
     }
+
     return NULL;
 }
+
+
+void *monitor_death(void *arg) {
+    t_philosopher *philosophers = (t_philosopher *)arg;
+    t_data *data = philosophers[0].sim_info;
+
+    while (!data->stop_simulation) {
+        for (int i = 0; i < data->total_philosophers; i++) {
+            pthread_mutex_lock(&data->last_meal_lock);
+            if (get_current_time() - philosophers[i].last_meal_time > data->time_to_die) {
+                print_action(&philosophers[i], "has died");
+                data->stop_simulation = 1;
+                pthread_mutex_unlock(&data->last_meal_lock);
+                return NULL;
+            }
+            pthread_mutex_unlock(&data->last_meal_lock);
+        }
+        usleep(1000); // Check periodically
+    }
+
+    return NULL;
+}
+
 
 int main(int ac, char **av) {
     t_data data;
     pthread_mutex_t *forks;
     t_philosopher *philosophers;
     pthread_t *threads;
+    pthread_t monitor_thread;
 
     if (ac < 5 || ac > 6) {
         printf("Usage: ./philo num_philosophers time_to_die time_to_eat time_to_sleep [meals_required]\n");
         return 1;
     }
 
+    // Initialize simulation data
     init_data(&data, av);
-    forks = init_forks(&data);
-    if (!forks) return 1;
 
-    philosophers = init_philosophers(&data, forks);
-    if (!philosophers) {
-        free(forks);
+    // Initialize forks (mutexes)
+    forks = init_forks(&data);
+    if (!forks) {
+        fprintf(stderr, "Failed to initialize forks\n");
         return 1;
     }
 
+    // Initialize philosophers
+    philosophers = init_philosophers(&data, forks);
+    if (!philosophers) {
+        free(forks);
+        fprintf(stderr, "Failed to initialize philosophers\n");
+        return 1;
+    }
+
+    // Initialize philosopher threads
     threads = malloc(sizeof(pthread_t) * data.total_philosophers);
     if (!threads) {
         free(forks);
         free(philosophers);
+        fprintf(stderr, "Failed to allocate memory for threads\n");
         return 1;
     }
 
     for (int i = 0; i < data.total_philosophers; i++) {
-        if (pthread_create(&threads[i], NULL, philosopher_routine, (void *)&philosophers[i]) != 0) {
-            perror("Failed to create thread");
-            free(forks);
-            free(philosophers);
-            free(threads);
-            return 1;
+        if (pthread_create(&threads[i], NULL, philosopher_routine, &philosophers[i]) != 0) {
+            fprintf(stderr, "Failed to create thread for philosopher %d\n", i + 1);
+            data.stop_simulation = 1; // Signal to stop the simulation
+            break;
         }
     }
 
-    // Wait for all threads to finish
+    // Create the monitor thread
+    if (pthread_create(&monitor_thread, NULL, monitor_death, philosophers) != 0) {
+        fprintf(stderr, "Failed to create death monitor thread\n");
+        data.stop_simulation = 1;
+    }
+
+    // Wait for the monitor thread to finish (detects death)
+    pthread_join(monitor_thread, NULL);
+
+    // Signal all philosopher threads to stop
+    data.stop_simulation = 1;
+
+    // Wait for all philosopher threads to finish
     for (int i = 0; i < data.total_philosophers; i++) {
         pthread_join(threads[i], NULL);
     }
 
+    // Cleanup resources
     free(forks);
     free(philosophers);
     free(threads);
