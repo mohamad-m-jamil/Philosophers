@@ -37,6 +37,9 @@ void init_data(t_data *data, char **av) {
     data->time_to_sleep = atoi(av[4]);
     if (av[5]) {
         data->meals_required = atoi(av[5]);
+        if (data->meals_required == 0) {
+            data->stop_simulation = 1; // Stop simulation immediately
+        }
     } else {
         data->meals_required = -1;
     }
@@ -159,8 +162,17 @@ void *philosopher_routine(void *arg) {
         pthread_mutex_unlock(philo->right_fork);
         pthread_mutex_unlock(philo->left_fork);
 
-        // Check if simulation has been stopped
-        if (philo->sim_info->stop_simulation) break;
+        // Increment meals eaten
+        philo->meals_had++;
+        if (philo->sim_info->meals_required != -1 && philo->meals_had >= philo->sim_info->meals_required) {
+            philo->sim_info->meals_eaten++;
+        }
+
+        // Check if all philosophers have eaten the required number of meals
+        if (philo->sim_info->meals_eaten >= philo->sim_info->total_philosophers) {
+            philo->sim_info->stop_simulation = 1;
+            break;
+        }
 
         // Sleeping
         print_action(philo, "is sleeping");
@@ -169,6 +181,7 @@ void *philosopher_routine(void *arg) {
 
     return NULL;
 }
+
 
 
 void *monitor_death(void *arg) {
