@@ -19,6 +19,7 @@
 # include <stdlib.h>
 # include <sys/time.h>
 # include <unistd.h>
+#include <stdlib.h>
 
 typedef struct s_data {
     int                 total_philosophers;

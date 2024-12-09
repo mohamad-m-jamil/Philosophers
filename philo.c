@@ -86,23 +86,20 @@ void *philosopher_routine(void *arg) {
     while (!philo->sim_info->stop_simulation) {
         print_action(philo, "is thinking");
 
-        // Lock forks in consistent order
-        pthread_mutex_lock(first_fork);
+       
+
+        if (pthread_mutex_trylock(first_fork) == 0) {
         print_action(philo, "has taken a fork");
-        pthread_mutex_lock(second_fork);
-        print_action(philo, "has taken a fork");
-
-        // Update last meal time
-        pthread_mutex_lock(&philo->sim_info->last_meal_lock);
-        philo->last_meal_time = current_time_in_ms();
-        pthread_mutex_unlock(&philo->sim_info->last_meal_lock);
-
-        print_action(philo, "is eating");
-        usleep(philo->sim_info->time_to_eat * 1000);
-
-        // Unlock forks
-        pthread_mutex_unlock(second_fork);
+        if (pthread_mutex_trylock(second_fork) == 0) {
+            print_action(philo, "has taken a fork");
+            pthread_mutex_lock(&philo->sim_info->last_meal_lock);
+            philo->last_meal_time = current_time_in_ms();
+            pthread_mutex_unlock(&philo->sim_info->last_meal_lock);
+            pthread_mutex_unlock(second_fork);
+        }
         pthread_mutex_unlock(first_fork);
+    }
+
 
         pthread_mutex_lock(&philo->sim_info->meals_lock);
         philo->meals_had++;
@@ -132,13 +129,34 @@ void *monitor_death(void *arg) {
                 print_action(&philosophers[i], "has died");
                 data->stop_simulation = 1;
                 pthread_mutex_unlock(&data->last_meal_lock);
-                return NULL;
+                exit(EXIT_FAILURE);
             }
             pthread_mutex_unlock(&data->last_meal_lock);
         }
-        usleep(1000);
+        
     }
     return NULL;
+}
+void destroy_resources(t_data *data, t_philosopher *philosophers, pthread_mutex_t *forks, pthread_t *threads) {
+    if (forks) {
+        for (int i = 0; i < data->total_philosophers; i++) {
+            pthread_mutex_destroy(&forks[i]);
+        }
+        free(forks);
+    }
+
+    if (philosophers) {
+        free(philosophers);
+    }
+
+    if (threads) {
+        free(threads);
+    }
+
+    pthread_mutex_destroy(&data->last_meal_lock);
+    pthread_mutex_destroy(&data->meals_lock);
+    pthread_mutex_destroy(&data->print_lock);
+    pthread_mutex_destroy(&data->death_mutex);
 }
 
 int main(int ac, char **av) {
@@ -187,8 +205,6 @@ int main(int ac, char **av) {
         pthread_join(threads[i], NULL);
     }
 
-    free(forks);
-    free(philosophers);
-    free(threads);
+    destroy_resources(&data, philosophers, forks, threads);
     return 0;
 }
