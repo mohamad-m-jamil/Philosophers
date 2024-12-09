@@ -72,13 +72,27 @@ t_philosopher *init_philosophers(t_data *data, pthread_mutex_t *forks) {
 void *philosopher_routine(void *arg) {
     t_philosopher *philo = (t_philosopher *)arg;
 
+    pthread_mutex_t *first_fork, *second_fork;
+
+    // Determine lock order based on fork IDs
+    if (philo->left_fork < philo->right_fork) {
+        first_fork = philo->left_fork;
+        second_fork = philo->right_fork;
+    } else {
+        first_fork = philo->right_fork;
+        second_fork = philo->left_fork;
+    }
+
     while (!philo->sim_info->stop_simulation) {
         print_action(philo, "is thinking");
-        pthread_mutex_lock(philo->left_fork);
+
+        // Lock forks in consistent order
+        pthread_mutex_lock(first_fork);
         print_action(philo, "has taken a fork");
-        pthread_mutex_lock(philo->right_fork);
+        pthread_mutex_lock(second_fork);
         print_action(philo, "has taken a fork");
 
+        // Update last meal time
         pthread_mutex_lock(&philo->sim_info->last_meal_lock);
         philo->last_meal_time = current_time_in_ms();
         pthread_mutex_unlock(&philo->sim_info->last_meal_lock);
@@ -86,8 +100,9 @@ void *philosopher_routine(void *arg) {
         print_action(philo, "is eating");
         usleep(philo->sim_info->time_to_eat * 1000);
 
-        pthread_mutex_unlock(philo->right_fork);
-        pthread_mutex_unlock(philo->left_fork);
+        // Unlock forks
+        pthread_mutex_unlock(second_fork);
+        pthread_mutex_unlock(first_fork);
 
         pthread_mutex_lock(&philo->sim_info->meals_lock);
         philo->meals_had++;
@@ -104,6 +119,7 @@ void *philosopher_routine(void *arg) {
     }
     return NULL;
 }
+
 
 void *monitor_death(void *arg) {
     t_philosopher *philosophers = (t_philosopher *)arg;
