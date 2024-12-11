@@ -21,30 +21,30 @@
 # include <unistd.h>
 #include <stdlib.h>
 
-typedef struct s_data {
-    int                 total_philosophers;
-    int                 time_to_die;
-    int                 time_to_eat;
-    int                 time_to_sleep;
-    int                 meals_required;
-    int                 meals_eaten;
-    size_t              simulation_start;
-    int                 stop_simulation;
-    pthread_mutex_t     last_meal_lock;
-    pthread_mutex_t     meals_lock;
-    pthread_mutex_t     print_lock;
-    pthread_mutex_t     simulation_lock;
-    pthread_mutex_t     death_mutex;
-    int                 is_anyone_dead;
-} t_data;
+typedef struct s_data
+{
+	int				time_to_die;
+	int				time_to_eat;
+	int				time_to_sleep;
+	int				total_philosophers;
+	int				meals_required;
+	int				meals_eaten;
+	long long		simulation_start;
+	bool			stop_simulation;
+	pthread_mutex_t	print_lock;
+	pthread_mutex_t	meals_lock;
+	pthread_mutex_t	simulation_lock;
+	pthread_mutex_t	last_meal_lock;
+}					t_data;
 
-typedef struct s_philosopher {
-    int                 id;
-    int                 meals_had;
-    size_t              last_meal_time;
-    t_data              *sim_info;
-    pthread_mutex_t     *left_fork;
-    pthread_mutex_t     *right_fork;
-} t_philosopher;
+typedef struct s_philosopher
+{
+	int				id;
+	int				meals_had;
+	int				last_meal_time;
+	pthread_mutex_t	*left_fork;
+	pthread_mutex_t	*right_fork;
+	t_data			*sim_info;
+}					t_philosopher;
 
 #endif
