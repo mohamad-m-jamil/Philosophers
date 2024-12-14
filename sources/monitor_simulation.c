@@ -6,7 +6,7 @@
 /*   By: mjamil <mjamil@student.42.fr>              +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2024/12/14 12:46:51 by mjamil            #+#    #+#             */
-/*   Updated: 2024/12/14 13:21:43 by mjamil           ###   ########.fr       */
+/*   Updated: 2024/12/14 14:43:33 by mjamil           ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -15,7 +15,7 @@
 static void	set_sim_stop_flag(t_data *data, bool state)
 {
 	pthread_mutex_lock(&data->sim_stop_lock);
-		data->sim_stop = state;
+	data->sim_stop = state;
 	pthread_mutex_unlock(&data->sim_stop_lock);
 }
 
@@ -72,6 +72,7 @@ static bool	end_condition_reached(t_data *data)
 	}
 	return (false);
 }
+
 void	*monitor(void *src)
 {
 	t_data			*data;
