@@ -6,7 +6,7 @@
 /*   By: mjamil <mjamil@student.42.fr>              +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2024/12/14 11:31:38 by mjamil            #+#    #+#             */
-/*   Updated: 2024/12/14 14:39:05 by mjamil           ###   ########.fr       */
+/*   Updated: 2024/12/20 14:43:56 by mjamil           ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -60,6 +60,7 @@ static t_philo	**init_philosophers(t_data *data)
 		philos[i]->data = data;
 		philos[i]->id = i;
 		philos[i]->times_ate = 0;
+		philos[i]->last_meal = 0;
 		assign_forks(philos[i]);
 		i++;
 	}
