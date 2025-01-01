@@ -6,7 +6,7 @@
 /*   By: mjamil <mjamil@student.42.fr>              +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2024/12/14 10:42:28 by mjamil            #+#    #+#             */
-/*   Updated: 2024/12/14 14:42:35 by mjamil           ###   ########.fr       */
+/*   Updated: 2025/01/01 18:11:24 by mjamil           ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -46,7 +46,7 @@ static void	stop_sim(t_data	*data)
 	}
 	if (data->nb_of_philo > 1)
 		pthread_join(data->grim_reaper, NULL);
-	if (DEBUG_FORMATTING == true && data->must_eat_count != -1)
+	if (DEBUG_FORMATTING == 0 && data->must_eat_count != -1)
 		write_outcome(data);
 	destroy_mutexes(data);
 	free_table(data);
